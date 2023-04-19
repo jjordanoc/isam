@@ -45,14 +45,18 @@ struct DataPage {
 
     vector<RecordType> locate(fstream &file, KeyType key) {
         vector<RecordType> result;
-        while (next != -1) {
+        while (true) {
             for (int i = 0; i < size; ++i) {
                 if (records[i].key == key) {
                     result.push_back(records[i]);
                 }
             }
-            file.seekg(next);
-            file.read((char *) this, PAGE_SIZE);
+            if (next != -1) {
+                file.seekg(next);
+                file.read((char *) this, PAGE_SIZE);
+            } else {
+                break;
+            }
         }
         return result;
     }
