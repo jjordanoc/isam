@@ -43,12 +43,42 @@ struct IndexPage {
     long locate(KeyType key) {
         for (int i = 0; i < )
     }
+
+    vector<long> localizarEntre(KeyType begin_key, KeyType end_key){
+        int beginPos;
+        int endPos;
+        vector<long> result;                // ---From here
+        for(int i = 0; i < sizeof(keys); ++i){ // P0 K1 P1
+
+            if(begin_key <= keys[i]){
+                //begin_key == keys[i] ? beginPos = i : beginPos = i-1;
+                beginPos = i-1;
+                break;
+            }
+        }
+        beginPos++;
+        for(int i = beginPos; i < sizeof(keys); ++i){
+            if(end_key <= keys[i]){
+                //end_key == keys[i] ? endPos = i : endPos = i-1;
+                endPos = i-1;
+                break;
+            }
+        }
+        endPos++;
+
+        //get positions
+        for(int i = beginPos; i < endPos+1; ++i){
+            result.push_back(children[i]);
+        }
+
+        return result;
+    }
 };
 
 template<typename RecordType>
 const long N = (PAGE_SIZE - sizeof(int) - sizeof(long)) / sizeof(RecordType);
 
-template<typename RecordType>
+template<typename RecordType, typename KeyType>
 struct DataPage {
     // PAGE_SIZE = sizeof(RecordType) * N + sizeof(int) + sizeof(long)
     RecordType *records = nullptr;
@@ -58,6 +88,14 @@ struct DataPage {
     DataPage() {
         records = new RecordType[N<RecordType>];
     }
+
+    vector<RecordType> locateTill(KeyType begin_key, KeyType end_key){
+        vector<RecordType> result;
+
+
+        return result;
+    }
+
 };
 
 template<typename RecordType, typename KeyType>
@@ -86,7 +124,41 @@ public:
         long page1 = indexPage1.locate(index1, key);
         index1.close();
     }
-    vector<RecordType> rangeSearch(KeyType key) {
+
+
+    vector<RecordType> rangeSearch(KeyType begin_key, KeyType end_key) {
+
+        index1.open(indexfilename(1), flags);
+        IndexPage<KeyType> indexPage1;
+        indexPage1.read(index1);
+        long page1 = indexPage1.locate(index1, begin_key);
+        index1.close();
+
+        // read index file 2
+        index2.open(indexfilename(2), flags);
+        index2.seekg(page1);
+        IndexPage<KeyType> indexPage2;
+        indexPage2.read(index2);
+        long page2 = indexPage2.locate(index2, begin_key);
+        index2.close();
+
+        // read index file 3
+        index3.open(indexfilename(3), flags);
+        index3.seekg(page2);
+        IndexPage<KeyType> indexPage3;
+        indexPage3.read(index3);
+        long page3 = indexPage3.locate(index3, begin_key);
+        index3.close();
+
+        file.open(filename, flags);
+        file.seekg(page3);
+        DataPage<RecordType, KeyType> dataPage;
+        dataPage.read(file);
+        vector<RecordType> records = dataPage.locateTill(end_key);
+        file.close();
+        return records;
+
+
     }
 };
 
