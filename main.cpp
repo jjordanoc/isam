@@ -28,7 +28,7 @@ struct IndexPage {
         long tmpChild;
         file.read((char *) &tmpChild, sizeof(long));
         children[j++] = tmpChild;
-        while (!file.eof()) {
+        while (size < M<KeyType> && !file.eof()) {
             file.read((char *) &tmpKey, sizeof(KeyType));
             file.read((char *) &tmpChild, sizeof(long));
             if (!file.eof()) {
@@ -41,7 +41,11 @@ struct IndexPage {
     }
 
     long locate(KeyType key) {
-        for (int i = 0; i < )
+        int i = 0;
+        while (i < size && key <= keys[i]) {
+           ++i;
+        }
+        return children[i];
     }
 
     vector<long> localizarEntre(KeyType begin_key, KeyType end_key){
@@ -89,6 +93,14 @@ struct DataPage {
         records = new RecordType[N<RecordType>];
     }
 
+    void read(fstream &file) {
+
+    }
+
+    vector<RecordType> locate(KeyType key) {
+
+    }
+
     vector<RecordType> locateTill(KeyType begin_key, KeyType end_key){
         vector<RecordType> result;
 
@@ -118,11 +130,36 @@ public:
     void add(RecordType record) {
     }
     vector<RecordType> search(KeyType key) {
+        // read index file 1
         index1.open(indexfilename(1), flags);
         IndexPage<KeyType> indexPage1;
         indexPage1.read(index1);
         long page1 = indexPage1.locate(index1, key);
         index1.close();
+
+        // read index file 2
+        index2.open(indexfilename(2), flags);
+        index2.seekg(page1);
+        IndexPage<KeyType> indexPage2;
+        indexPage2.read(index2);
+        long page2 = indexPage2.locate(index2, key);
+        index2.close();
+
+        // read index file 3
+        index3.open(indexfilename(3), flags);
+        index3.seekg(page2);
+        IndexPage<KeyType> indexPage3;
+        indexPage3.read(index3);
+        long page3 = indexPage3.locate(index3, key);
+        index3.close();
+
+        file.open(filename, flags);
+        file.seekg(page3);
+        DataPage<RecordType, KeyType> dataPage;
+        dataPage.read(file);
+        vector<RecordType> records = dataPage.locate(key);
+        file.close();
+        return records;
     }
 
 
