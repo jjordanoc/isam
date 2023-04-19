@@ -16,14 +16,14 @@ template<typename KeyType>
 struct IndexPage {
     int size = 0;
     KeyType keys[M];
-    long children[M+1];
+    long children[M + 1];
 
     IndexPage() = default;
 
     long locate(KeyType key) {
         int i = 0;
         while (i < size && key > keys[i]) {
-           ++i;
+            ++i;
         }
         return children[i];
     }
@@ -37,7 +37,6 @@ const long N = (PAGE_SIZE - sizeof(int) - sizeof(long)) / sizeof(RecordType);
 
 template<typename RecordType, typename KeyType>
 struct DataPage {
-
     int size = 0;
     RecordType records[N];
     long next = -1;
@@ -46,64 +45,47 @@ struct DataPage {
 
     vector<RecordType> locate(fstream &file, KeyType key) {
         vector<RecordType> result;
-
-        int i = 0;
-        while(i < size && key >= records[i]){
-            ++i;
-        }
-
-        bool flag = true;
-        for(int j = i; j < sizeof(records); ++j){
-            if(key != records[j]){
-                flag = false;
-                break;
+        while (next != -1) {
+            for (int i = 0; i < size; ++i) {
+                if (records[i].key == key) {
+                    result.push_back(records[i]);
+                }
             }
-            result.push_back(records[j]);
-        }
-
-        while(flag){
             file.seekg(next);
-            DataPage<RecordType, KeyType> dataPage;
-            dataPage.read(file);
-            for(int j = 0; j < sizeof(dataPage.records); ++j){
-                if(key != records[j]) break;
-                result.push_back(records[j]);
-            }
+            file.read((char *) this, PAGE_SIZE);
         }
-
         return result;
     }
 
-    vector<RecordType> locateRange(fstream &file, KeyType begin_key, KeyType end_key){
+    vector<RecordType> locateRange(fstream &file, KeyType begin_key, KeyType end_key) {
         vector<RecordType> result;
 
         int i = 0;
-        while(i < size && begin_key >= records[i]){
+        while (i < size && begin_key >= records[i]) {
             ++i;
         }
 
         bool flag = true;
-        for(int j = i; j < sizeof(records); ++j){
-            if(end_key < records[j]){
+        for (int j = i; j < sizeof(records); ++j) {
+            if (end_key < records[j]) {
                 flag = false;
                 break;
             }
             result.push_back(records[j]);
         }
 
-        while(flag){
+        while (flag) {
             file.seekg(next);
             DataPage<RecordType, KeyType> dataPage;
             dataPage.read(file);
-            for(int j = 0; j < sizeof(dataPage.records); ++j){
-                if(end_key < records[j]) break;
+            for (int j = 0; j < sizeof(dataPage.records); ++j) {
+                if (end_key < records[j]) break;
                 result.push_back(records[j]);
             }
         }
 
         return result;
     }
-
 };
 
 template<typename RecordType, typename KeyType>
@@ -151,7 +133,10 @@ public:
         file.seekg(page3);
         DataPage<RecordType, KeyType> dataPage;
         file.read((char *) &dataPage, PAGE_SIZE);
-        if (dataPage.size == N) {
+        // there are two options, we either
+        // 1. find a non-full page in the linked list of pages, in which case we insert it to the end of the non-full page and re-write it
+        // 2. all pages are full, in which case we have to create a new page in the linked list of pages
+        if (dataPage.size == N - 1) {
             dataPage.next = file.tellg();
             file.seekp(dataPage.next);
             dataPage = DataPage<RecordType, KeyType>();
