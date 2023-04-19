@@ -1,3 +1,4 @@
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <vector>
@@ -5,6 +6,26 @@
 using namespace std;
 
 #define PAGE_SIZE 512
+
+
+struct Alumno {
+    char codigo[3];
+    char nombre[7];
+    int ciclo;
+
+    friend bool operator==(char *key, const Alumno &alumno2) {
+        return strcmp(key, alumno2.codigo) == 0;
+    }
+
+    friend bool operator<(char *key, const Alumno &alumno2) {
+        return strcmp(key, alumno2.codigo) < 0;
+    }
+
+    friend bool operator>(char *key, const Alumno &alumno2) {
+        return strcmp(key, alumno2.codigo) > 0;
+    }
+};
+
 
 // PAGE_SIZE = sizeof(KeyType) * M + sizeof(long) * (M+1) + sizeof(int)
 template<typename KeyType>
@@ -47,7 +68,7 @@ struct DataPage {
         vector<RecordType> result;
         while (true) {
             for (int i = 0; i < size; ++i) {
-                if (records[i].key == key) {
+                if (key == records[i]) {
                     result.push_back(records[i]);
                 }
             }
@@ -65,7 +86,7 @@ struct DataPage {
         vector<RecordType> result;
 
         int i = 0;
-        while (i < size && begin_key >= records[i]) {
+        while (i < size && begin_key > records[i]) {
             ++i;
         }
 
@@ -81,7 +102,7 @@ struct DataPage {
         while (flag) {
             file.seekg(next);
             DataPage<RecordType, KeyType> dataPage;
-            dataPage.read(file);
+            file.read((char *) this, PAGE_SIZE);
             for (int j = 0; j < sizeof(dataPage.records); ++j) {
                 if (end_key < records[j]) break;
                 result.push_back(records[j]);
@@ -109,12 +130,12 @@ public:
         file.open(filename, flags);
         file.close();
     }
-    void add(KeyType key, RecordType record) {
+    void add(RecordType record) {
         // read index file 1
         index1.open(indexfilename(1), flags);
         IndexPage<KeyType> indexPage1;
         index1.read((char *) &indexPage1, PAGE_SIZE);
-        long page1 = indexPage1.locate(index1, key);
+        long page1 = indexPage1.locate(record.codigo);
         index1.close();
 
         // read index file 2
@@ -122,7 +143,7 @@ public:
         index2.seekg(page1);
         IndexPage<KeyType> indexPage2;
         index2.read((char *) &indexPage2, PAGE_SIZE);
-        long page2 = indexPage2.locate(index2, key);
+        long page2 = indexPage2.locate(record.codigo);
         index2.close();
 
         // read index file 3
@@ -130,7 +151,7 @@ public:
         index3.seekg(page2);
         IndexPage<KeyType> indexPage3;
         index3.read((char *) &indexPage3, PAGE_SIZE);
-        long page3 = indexPage3.locate(index3, key);
+        long page3 = indexPage3.locate(record.codigo);
         index3.close();
 
         file.open(filename, flags);
@@ -246,13 +267,21 @@ public:
  * registro = localizar(dataPage, searchKey)
  */
 
-struct Alumno {
-    char codigo[10];
-    char nombre[40];
-    int ciclo;
-};
 
 int main() {
     ISAM<Alumno, char[10]> isam("data.dat");
+    auto result = isam.search("20 ");
+    for (const auto &a: result) {
+        cout << a.codigo << " " << a.nombre << " " << a.ciclo << endl;
+    }
+    auto range = isam.rangeSearch("20 ", "200");
+    for (const auto &a: range) {
+        cout << a.codigo << " " << a.nombre << " " << a.ciclo << endl;
+    }
+    Alumno nuevo{};
+    strcpy(nuevo.codigo, "192");
+    strcpy(nuevo.nombre, "Joaquin");
+    nuevo.ciclo = 3;
+    isam.add(nuevo);
     return 0;
 }
