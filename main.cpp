@@ -94,7 +94,24 @@ struct DataPage {
     }
 
     void read(fstream &file) {
+        int i = 0;
+        RecordType tmpRecord;
+        file.read((char *) &tmpRecord, sizeof(RecordType));
+        while (size < N<RecordType> && !file.eof()) {
+            if (!file.eof()) {
+                records[i++] = tmpRecord;
+                ++size;
+            }
+            file.read((char *) &tmpRecord, sizeof(RecordType));
+        }
+        file.read((char *) &next, sizeof(long));
+    }
 
+    void write(fstream &file) {
+        for (int i = 0; i < size; ++i) {
+            file.write((char *) &records[i], sizeof(RecordType));
+        }
+        file.write((char *) &next, sizeof(long));
     }
 
     vector<RecordType> locate(KeyType key) {
@@ -127,7 +144,47 @@ public:
         file.open(filename, flags);
         file.close();
     }
-    void add(RecordType record) {
+    void add(KeyType key, RecordType record) {
+        // read index file 1
+        index1.open(indexfilename(1), flags);
+        IndexPage<KeyType> indexPage1;
+        indexPage1.read(index1);
+        long page1 = indexPage1.locate(index1, key);
+        index1.close();
+
+        // read index file 2
+        index2.open(indexfilename(2), flags);
+        index2.seekg(page1);
+        IndexPage<KeyType> indexPage2;
+        indexPage2.read(index2);
+        long page2 = indexPage2.locate(index2, key);
+        index2.close();
+
+        // read index file 3
+        index3.open(indexfilename(3), flags);
+        index3.seekg(page2);
+        IndexPage<KeyType> indexPage3;
+        indexPage3.read(index3);
+        long page3 = indexPage3.locate(index3, key);
+        index3.close();
+
+        file.open(filename, flags);
+        file.seekg(page3);
+        DataPage<RecordType, KeyType> dataPage;
+        dataPage.read(file);
+        if (dataPage.size == N<RecordType>) {
+            dataPage.next = file.tellg();
+            file.seekp(dataPage.next);
+            dataPage = DataPage<RecordType, KeyType>();
+            dataPage.records[0] = record;
+            dataPage.size = 1;
+            dataPage.write(file);
+        } else {
+            dataPage.records[dataPage.size++] = record;
+            file.seekp(page3);
+            dataPage.write(file);
+        }
+        file.close();
     }
     vector<RecordType> search(KeyType key) {
         // read index file 1
