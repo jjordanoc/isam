@@ -48,10 +48,10 @@ struct IndexPage {
         return children[i];
     }
 
-    vector<long> localizarEntre(KeyType begin_key, KeyType end_key){
+    vector<long> locateTill(KeyType begin_key, KeyType end_key){
         int beginPos;
         int endPos;
-        vector<long> result;                // ---From here
+        vector<long> result;                   // ---From here
         for(int i = 0; i < sizeof(keys); ++i){ // P0 K1 P1
 
             if(begin_key <= keys[i]){
@@ -114,13 +114,62 @@ struct DataPage {
         file.write((char *) &next, sizeof(long));
     }
 
-    vector<RecordType> locate(KeyType key) {
-
-    }
-
-    vector<RecordType> locateTill(KeyType begin_key, KeyType end_key){
+    vector<RecordType> locate(fstream &file, KeyType key) {
         vector<RecordType> result;
 
+        int i = 0;
+        while(i < size && key >= records[i]){
+            ++i;
+        }
+
+        bool flag = true;
+        for(int j = i; j < sizeof(records); ++j){
+            if(key != records[j]){
+                flag = false;
+                break;
+            }
+            result.push_back(records[j]);
+        }
+
+        while(flag){
+            file.seekg(next);
+            DataPage<RecordType, KeyType> dataPage;
+            dataPage.read(file);
+            for(int j = 0; j < sizeof(dataPage.records); ++j){
+                if(key != records[j]) break;
+                result.push_back(records[j]);
+            }
+        }
+
+        return result;
+    }
+
+    vector<RecordType> locateTill(fstream &file, KeyType begin_key, KeyType end_key){
+        vector<RecordType> result;
+
+        int i = 0;
+        while(i < size && begin_key >= records[i]){
+            ++i;
+        }
+
+        bool flag = true;
+        for(int j = i; j < sizeof(records); ++j){
+            if(end_key < records[j]){
+                flag = false;
+                break;
+            }
+            result.push_back(records[j]);
+        }
+
+        while(flag){
+            file.seekg(next);
+            DataPage<RecordType, KeyType> dataPage;
+            dataPage.read(file);
+            for(int j = 0; j < sizeof(dataPage.records); ++j){
+                if(end_key < records[j]) break;
+                result.push_back(records[j]);
+            }
+        }
 
         return result;
     }
@@ -191,7 +240,7 @@ public:
         index1.open(indexfilename(1), flags);
         IndexPage<KeyType> indexPage1;
         indexPage1.read(index1);
-        long page1 = indexPage1.locate(index1, key);
+        long page1 = indexPage1.locate(key);
         index1.close();
 
         // read index file 2
@@ -199,7 +248,7 @@ public:
         index2.seekg(page1);
         IndexPage<KeyType> indexPage2;
         indexPage2.read(index2);
-        long page2 = indexPage2.locate(index2, key);
+        long page2 = indexPage2.locate(key);
         index2.close();
 
         // read index file 3
@@ -207,21 +256,21 @@ public:
         index3.seekg(page2);
         IndexPage<KeyType> indexPage3;
         indexPage3.read(index3);
-        long page3 = indexPage3.locate(index3, key);
+        long page3 = indexPage3.locate(key);
         index3.close();
 
         file.open(filename, flags);
         file.seekg(page3);
         DataPage<RecordType, KeyType> dataPage;
         dataPage.read(file);
-        vector<RecordType> records = dataPage.locate(key);
+        vector<RecordType> records = dataPage.locate(file, key);
         file.close();
         return records;
     }
 
 
     vector<RecordType> rangeSearch(KeyType begin_key, KeyType end_key) {
-
+        // read index file 1
         index1.open(indexfilename(1), flags);
         IndexPage<KeyType> indexPage1;
         indexPage1.read(index1);
@@ -248,7 +297,7 @@ public:
         file.seekg(page3);
         DataPage<RecordType, KeyType> dataPage;
         dataPage.read(file);
-        vector<RecordType> records = dataPage.locateTill(end_key);
+        vector<RecordType> records = dataPage.locateTill(file, begin_key,end_key);
         file.close();
         return records;
 
