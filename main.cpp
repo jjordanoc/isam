@@ -114,7 +114,7 @@ struct DataPage {
             }
             if (next != -1) {
                 file.seekg(next);
-                file.read((char *) this, PAGE_SIZE);
+                file.read((char *) this, PAGE_SIZE); // for all the overflow pages that has our page where we landed, there will be a lecture.
             } else {
                 break;
             }
@@ -143,7 +143,7 @@ struct DataPage {
         DataPage<RecordType, KeyType> dataPage;
         while (flag) {
             file.seekg(firstPosPage + PAGE_SIZE*pagesRead++);
-            file.read((char *) &dataPage, PAGE_SIZE);
+            file.read((char *) &dataPage, PAGE_SIZE); // lecture for all remaining pages that key is in range
             for (int i = 0; i < sizeof(dataPage.records); ++i) {
                 if (end_key < dataPage.records[i]) {
                     flag = false;
@@ -157,7 +157,7 @@ struct DataPage {
 
         while(!overflowPages.empty()){
             file.seekg(overflowPages.top());
-            file.read((char *) &dataPage, PAGE_SIZE);
+            file.read((char *) &dataPage, PAGE_SIZE); // for each identified overflow page where is our key in range, there will be a lecture
             for (int i = 0; i < sizeof(dataPage); ++i) {
                 if(pagesRead == 1) {
                     if (end_key < dataPage.records[i]) result.push_back(dataPage.records[i]);
