@@ -2,6 +2,7 @@
 #include <fstream>
 #include <iostream>
 #include <vector>
+#include <stack>
 
 using namespace std;
 
@@ -121,16 +122,14 @@ struct DataPage {
         return result;
     }
 
-    vector<RecordType> locateRange(fstream &file, KeyType begin_key, KeyType end_key) {
+    vector<RecordType> locateRange(fstream &file, KeyType begin_key, KeyType end_key, long firstPosPage) {
         vector<RecordType> result;
-
-        int i = 0;
-        while (i < size && begin_key > records[i]) {
-            ++i;
-        }
+        stack<long> overflowPages;
+        int temp = 0;
+        while (temp < size && begin_key > records[temp]) ++temp;
 
         bool flag = true;
-        for (int j = i; j < sizeof(records); ++j) {
+        for (int j = temp; j < sizeof(records); ++j) {
             if (end_key < records[j]) {
                 flag = false;
                 break;
@@ -138,14 +137,35 @@ struct DataPage {
             result.push_back(records[j]);
         }
 
+        if(next != -1 && flag) overflowPages.push(next);
+
+        int pagesRead = 1;
+        DataPage<RecordType, KeyType> dataPage;
         while (flag) {
-            file.seekg(next);
-            DataPage<RecordType, KeyType> dataPage;
-            file.read((char *) this, PAGE_SIZE);
-            for (int j = 0; j < sizeof(dataPage.records); ++j) {
-                if (end_key < records[j]) break;
-                result.push_back(records[j]);
+            file.seekg(firstPosPage + PAGE_SIZE*pagesRead++);
+            file.read((char *) &dataPage, PAGE_SIZE);
+            for (int i = 0; i < sizeof(dataPage.records); ++i) {
+                if (end_key < dataPage.records[i]) {
+                    flag = false;
+                    break;
+                }
+                result.push_back(dataPage.records[i]);
             }
+            if(next != -1 && flag) overflowPages.push(dataPage.next);
+
+        }
+
+        while(!overflowPages.empty()){
+            file.seekg(overflowPages.top());
+            file.read((char *) &dataPage, PAGE_SIZE);
+            for (int i = 0; i < sizeof(dataPage); ++i) {
+                if(pagesRead == 1) {
+                    if (end_key < dataPage.records[i]) result.push_back(dataPage.records[i]);
+                }
+                else
+                    result.push_back(dataPage.records[i]);
+            }
+            overflowPages.pop();
         }
 
         return result;
@@ -204,7 +224,7 @@ public:
         // read index file 1
         index1.open(indexfilename(1), flags);
         IndexPage<KeyType> indexPage1;
-        index1.read((char *) &indexPage1, PAGE_SIZE);
+        index1.read((char *) &indexPage1, PAGE_SIZE); // Lectura O(1) del disco
         long page1 = indexPage1.locate(key);
         index1.close();
 
@@ -212,7 +232,7 @@ public:
         index2.open(indexfilename(2), flags);
         index2.seekg(page1);
         IndexPage<KeyType> indexPage2;
-        index2.read((char *) &indexPage2, PAGE_SIZE);
+        index2.read((char *) &indexPage2, PAGE_SIZE); // Lectura O(1) del disco
         long page2 = indexPage2.locate(key);
         index2.close();
 
@@ -220,7 +240,7 @@ public:
         index3.open(indexfilename(3), flags);
         index3.seekg(page2);
         IndexPage<KeyType> indexPage3;
-        index3.read((char *) &indexPage3, PAGE_SIZE);
+        index3.read((char *) &indexPage3, PAGE_SIZE); // Lectura O(1) del disco
         long page3 = indexPage3.locate(key);
         index3.close();
 
@@ -228,17 +248,17 @@ public:
         file.seekg(page3);
         DataPage<RecordType, KeyType> dataPage;
         file.read((char *) &dataPage, PAGE_SIZE);
-        vector<RecordType> records = dataPage.locate(file, key);
+        vector<RecordType> records = dataPage.locate(file, key); // Lectura O(1) del disco solo si key se encuentra en un overflow page. Se repite el proceso hasta encontrarlo entre las overflow pages existentes secuenciales.
         file.close();
         return records;
     }
 
 
-    vector<RecordType> rangeSearch(KeyType begin_key, KeyType end_key) {
+    vector<RecordType> rangeSearch(KeyType begin_key, KeyType end_key) { // O(4 + m + k) lecturas del disco, siendo m la cantidad de paginas adicionales leidas y siendo k la cantidad de overflow pages adicionales leidas en donde esta el resultado.
         // read index file 1
         index1.open(indexfilename(1), flags);
         IndexPage<KeyType> indexPage1;
-        index1.read((char *) &indexPage1, PAGE_SIZE);
+        index1.read((char *) &indexPage1, PAGE_SIZE); // Lectura O(1) del disco
         long page1 = indexPage1.locate(begin_key);
         index1.close();
 
@@ -246,7 +266,7 @@ public:
         index2.open(indexfilename(2), flags);
         index2.seekg(page1);
         IndexPage<KeyType> indexPage2;
-        index2.read((char *) &indexPage2, PAGE_SIZE);
+        index2.read((char *) &indexPage2, PAGE_SIZE); // Lectura O(1) del disco
         long page2 = indexPage2.locate(begin_key);
         index2.close();
 
@@ -254,15 +274,15 @@ public:
         index3.open(indexfilename(3), flags);
         index3.seekg(page2);
         IndexPage<KeyType> indexPage3;
-        index3.read((char *) &indexPage3, PAGE_SIZE);
+        index3.read((char *) &indexPage3, PAGE_SIZE); // Lectura O(1) del disco
         long page3 = indexPage3.locate(begin_key);
         index3.close();
 
         file.open(filename, flags);
         file.seekg(page3);
         DataPage<RecordType, KeyType> dataPage;
-        file.read((char *) &dataPage, PAGE_SIZE);
-        vector<RecordType> records = dataPage.locateRange(file, begin_key, end_key);
+        file.read((char *) &dataPage, PAGE_SIZE); // Lectura O(1) del disco
+        vector<RecordType> records = dataPage.locateRange(file, begin_key, end_key, page3); // Lectura O(1) del disco por cada page y overflow page leída en donde esta el resultado de la key acotada.
         file.close();
         return records;
     }
