@@ -64,6 +64,45 @@ struct DataPage {
 
     DataPage() = default;
 
+    void insert(fstream &file, long firstPage, RecordType record) {
+        // there are two options, we either
+        // 1. find a non-full page in the linked list of pages, in which case we insert it to the end of the non-full page and re-write it
+        // 2. all pages are full, in which case we have to create a new page in the linked list of pages
+        long currentPagePos = firstPage;
+        while (true) {
+            // non-full page, insert element
+            if (size < N) {
+                records[size++] = record;
+                file.seekp(currentPagePos);
+                file.write((char *) this, PAGE_SIZE);
+                break;
+            } else {
+                // all pages are full, create new page and link it to list
+                if (next == -1) {
+                    // create new page with 1 record
+                    DataPage<RecordType, KeyType> newPage{};
+                    newPage.records[0] = record;
+                    newPage.size = 1;
+                    newPage.next = -1;
+                    file.seekp(0, ios::end);
+                    // link to new page
+                    this->next = file.tellp();
+                    file.write((char *) &newPage, PAGE_SIZE);
+                    // update current page
+                    file.seekp(currentPagePos);
+                    file.write((char *) &newPage, PAGE_SIZE);
+                    break;
+                }
+                // we can still explore the linked list of pages
+                else {
+                    currentPagePos = next;
+                    file.seekp(next);
+                    file.read((char *) this, PAGE_SIZE);
+                }
+            }
+        }
+    }
+
     vector<RecordType> locate(fstream &file, KeyType key) {
         vector<RecordType> result;
         while (true) {
@@ -158,21 +197,7 @@ public:
         file.seekg(page3);
         DataPage<RecordType, KeyType> dataPage;
         file.read((char *) &dataPage, PAGE_SIZE);
-        // there are two options, we either
-        // 1. find a non-full page in the linked list of pages, in which case we insert it to the end of the non-full page and re-write it
-        // 2. all pages are full, in which case we have to create a new page in the linked list of pages
-        if (dataPage.size == N - 1) {
-            dataPage.next = file.tellg();
-            file.seekp(dataPage.next);
-            dataPage = DataPage<RecordType, KeyType>();
-            dataPage.records[0] = record;
-            dataPage.size = 1;
-            file.write((char *) &dataPage, PAGE_SIZE);
-        } else {
-            dataPage.records[dataPage.size++] = record;
-            file.seekp(page3);
-            file.write((char *) &dataPage, PAGE_SIZE);
-        }
+        dataPage.insert(file, page3, record);
         file.close();
     }
     vector<RecordType> search(KeyType key) {
@@ -242,31 +267,6 @@ public:
         return records;
     }
 };
-
-/*
- * search:
- * open(index1.dat)
- * IndexPage index1;
- * read(index1, sizeof(IndexPage))
- * haga busqueda lineal hasta encontrar por donde bajar
- * pagina1 = localizar(index1, searchKey)
- * open(index2.dat)
- * IndexPage index2;
- * seek(pagina1)
- * read(index2, sizeof(IndexPage))
- * pagina2 = localizar(index2, searchKey)
- * open(index3.dat)
-* IndexPage index3;
-* seek(pagina1)
-* read(index3, sizeof(IndexPage))
-* pagina3 = localizar(index3, searchKey)
- * open(data.dat)
- * DataPage dataPage;
- * seek(pagina3)
- * read(dataPage, sizeof(DataPage))
- * registro = localizar(dataPage, searchKey)
- */
-
 
 int main() {
     ISAM<Alumno, char[10]> isam("data.dat");
